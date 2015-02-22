@@ -1,0 +1,174 @@
+---
+title: "Practical Machine Learning - Peer Assessments"
+author: "Lakshmi Narayana"
+date: "Sunday, February 22, 2015"
+output: 
+  html_document:
+    toc: TRUE
+    theme: united
+    highlight: pygments
+    keep_md: true 
+    
+---
+
+  Report is created for Coursera Practical Machine Learning - Course Project .  
+  
+  The data for this project come from this source: [http://groupware.les.inf.puc-rio.br/har] and the data set used is Weight Lifting Exercise Dataset.  
+  
+  
+
+## Executive Summary
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases. 
+
+
+## Goal of this Report
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases. 
+
+## Environment and libraries
+
+Loading required libraries and setting the seed for reproducable results.
+
+```{r,warning=FALSE,message=FALSE}
+library(knitr)
+opts_chunk$set(echo = TRUE, results = 'hold')
+
+# setInternet2 to TRUE to access https urls
+setInternet2(TRUE)
+
+
+library(ElemStatLearn)
+library(caret)
+library(rpart)
+library(randomForest)
+
+set.seed(1234)
+
+```
+
+## Data Processing
+
+### Getting the Data
+
+Reading the training [https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv] and testing [https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv] data from the urls. 
+
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+
+
+pml_training <- read.csv("http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",header=TRUE,sep=",",na.strings=c("", "NA", " "))
+
+pml_testing <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",header=TRUE,sep=",",na.strings=c("", "NA", " "))
+
+dim(pml_testing)
+dim(pml_training)
+
+```
+
+### Exploration & Cleaning the data
+
+Identifying the columns with empty values and cleaning.
+```{r}
+na_training = sapply(pml_training, function(x) {sum(is.na(x))})
+table(na_training)
+
+na_testing = sapply(pml_testing, function(x) {sum(is.na(x))})
+table(na_testing)
+
+
+```
+
+There are 60 features that have NA values for all the rows of the dataset and hence will be removed as the information does not improve the process of fitting the model.
+
+```{r}
+pml_training <- pml_training[, colSums(is.na(pml_training)) == 0]
+pml_testing <- pml_testing[, colSums(is.na(pml_testing)) == 0]
+
+dim(pml_training)
+dim(pml_testing)
+
+```
+Removing all columns that are not related. 
+
+```{r}
+
+pml_testing   <-  pml_testing[,c(7:60)]
+pml_training   <-  pml_training[,c(7:60)]
+
+dim(pml_training)
+dim(pml_testing)
+
+
+```
+
+Removin the column problem_ID
+```{r}
+
+pml_testing <- pml_testing[,-ncol(pml_testing)]
+
+dim(pml_testing)
+dim(pml_training)
+
+```
+
+
+## Modeling
+
+### Partitioning of the training data for training and validation
+
+Partitioning of the training data into 70% training and 30% for validating.
+
+```{r}
+inTrain = createDataPartition(y=pml_training$classe, p=0.70, list=FALSE)
+model_training = pml_training[inTrain,]
+model_validation = pml_training[-inTrain,]
+```
+
+### Fitting into the model
+
+In random forests, there is no need for cross-validation or a separate test set to get an unbiased estimate of the test set error. It is estimated internally, during the execution. So, we proced with the training the model (Random Forest) with the training data set.
+
+```{r}
+modelFit <- randomForest(classe~.,data=model_training,importance=TRUE)
+modelFit
+
+```
+
+### Cross Validation and Out of Sample Error
+
+```{r}
+varImpPlot(modelFit)
+confusionMatrix(predict(modelFit,newdata=model_validation[,-ncol(model_validation)]),model_validation$classe)
+
+print(1- 0.998)
+
+```
+As evaluated the accuracy on the validation set is 99.8% and out of Sample Error is 1-accuracy which is 0.002  
+
+## Model Evaluation with Test Data
+
+```{r}
+
+class_check <- (sapply(pml_testing, class) == sapply(pml_training[,-ncol(pml_training)], class))
+
+pml_testing[, !class_check] <- sapply(pml_testing[, !class_check], as.numeric)
+
+
+predictions <- predict(modelFit,pml_testing)
+predictions
+```
+
+
+## Generating Answers Files to Submit for Assignment.
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("./answers/problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predictions)
+```
+
